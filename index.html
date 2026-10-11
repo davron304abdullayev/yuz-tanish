@@ -1,137 +1,131 @@
 <!DOCTYPE html>
 <html lang="uz">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Yuzni tanish tizimi</title>
-
-  <style>
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #eef3f9;
-      color: #14213d;
-    }
-
-    header {
-      background: #102b50;
-      color: white;
-      padding: 24px 16px;
-      text-align: center;
-    }
-
-    main {
-      max-width: 720px;
-      margin: 30px auto;
-      padding: 24px;
-      background: white;
-      border-radius: 18px;
-      box-shadow: 0 8px 30px #102b5015;
-      text-align: center;
-    }
-
-    video {
-      width: 100%;
-      max-height: 380px;
-      background: #111827;
-      border-radius: 12px;
-      margin-top: 16px;
-    }
-
-    button {
-      border: 0;
-      border-radius: 10px;
-      padding: 13px 20px;
-      margin: 8px 4px;
-      background: #1769e0;
-      color: white;
-      font-size: 16px;
-      cursor: pointer;
-    }
-
-    button:hover {
-      background: #0d4eac;
-    }
-
-    #status {
-      padding: 12px;
-      background: #edf5ff;
-      border-radius: 10px;
-      line-height: 1.5;
-    }
-
-    footer {
-      text-align: center;
-      padding: 20px;
-      color: #53627a;
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yuz tanish</title>
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.js"></script>
+<style>
+body{margin:0;background:#111;color:#fff;font-family:sans-serif;text-align:center}
+.box{position:relative;width:100%;max-width:480px;margin:auto}
+video,canvas{width:100%;display:block}
+canvas{position:absolute;top:0;left:0}
+button,input{font-size:16px;margin:6px;padding:10px}
+</style>
 </head>
-
 <body>
-  <header>
-    <h1>Yuzni tanish tizimi</h1>
-    <p>Sun'iy intellekt texnologiyalarini o'rganish loyihasi</p>
-  </header>
+<h3>Yuz tanish</h3>
+<div id="holat">Modellar yuklanmoqda...</div>
+<div>
+<input id="ism" placeholder="Ism (masalan, Davron)">
+<input id="rasm" type="file" accept="image/*">
+<button id="qosh">Qo'shish</button>
+</div>
+<button id="boshla">Kamerani yoqish</button>
+<button id="almash">Kamerani almashtirish</button>
+<button id="tozala">Hammasini o'chirish</button>
+<div class="box"><video id="v" autoplay playsinline muted></video><canvas id="c"></canvas></div>
+<script>
+const MODEL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model/";
+const holat = document.getElementById("holat");
+const v = document.getElementById("v");
+const c = document.getElementById("c");
+let tanishlar = [], matcher = null;
+let rejim = "user", loopBor = false;
 
-  <main>
-    <h2>Jonli kamera</h2>
-    <p>Kamerani yoqing va tasvirni ko'ring.</p>
+try {
+  const s = JSON.parse(localStorage.getItem("yuzlar") || "[]");
+  tanishlar = s.map(x => ({ism: x.ism, d: new Float32Array(x.d)}));
+} catch (e) {}
 
-    <video id="camera" autoplay playsinline muted></video>
+function saqla() {
+  try {
+    localStorage.setItem("yuzlar", JSON.stringify(
+      tanishlar.map(t => ({ism: t.ism, d: Array.from(t.d)}))));
+  } catch (e) {}
+}
 
-    <div>
-      <button id="start">Kamerani yoqish</button>
-      <button id="stop">Kamerani o'chirish</button>
-    </div>
+function yangila() {
+  const m = {};
+  tanishlar.forEach(t => (m[t.ism] = m[t.ism] || []).push(t.d));
+  const list = Object.keys(m).map(n => new faceapi.LabeledFaceDescriptors(n, m[n]));
+  matcher = list.length ? new faceapi.FaceMatcher(list, 0.5) : null;
+}
 
-    <p id="status" role="status">
-      Kamera hali yoqilmagan.
-    </p>
+Promise.all([
+  faceapi.nets.tinyFaceDetector.loadFromUri(MODEL),
+  faceapi.nets.faceLandmark68Net.loadFromUri(MODEL),
+  faceapi.nets.faceRecognitionNet.loadFromUri(MODEL)
+]).then(() => {
+  yangila();
+  holat.textContent = "Tayyor. Tanishlar soni: " + tanishlar.length;
+}).catch(e => holat.textContent = "Model yuklanmadi: " + e);
 
-    <p>
-      Bu boshlang'ich versiya. Hozircha u yuzni aniqlamaydi
-      yoki shaxsni tanimaydi.
-    </p>
-  </main>
+document.getElementById("qosh").onclick = async () => {
+  const ism = document.getElementById("ism").value.trim();
+  const f = document.getElementById("rasm").files[0];
+  if (!ism || !f) { holat.textContent = "Ism yozing va rasm tanlang"; return; }
+  holat.textContent = "Rasm tekshirilmoqda...";
+  const img = await faceapi.bufferToImage(f);
+  const r = await faceapi
+    .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({inputSize: 512}))
+    .withFaceLandmarks().withFaceDescriptor();
+  if (!r) { holat.textContent = "Rasmda yuz topilmadi. Boshqa rasm tanlang."; return; }
+  tanishlar.push({ism, d: r.descriptor});
+  saqla(); yangila();
+  holat.textContent = ism + " qo'shildi. Jami: " + tanishlar.length;
+};
 
-  <footer>
- 
-  </footer>
+document.getElementById("tozala").onclick = () => {
+  if (!confirm("Hamma saqlangan yuzlar o'chiriladi. Rozimisiz?")) return;
+  tanishlar = []; saqla(); yangila();
+  holat.textContent = "Tozalandi. Tanishlar soni: 0";
+};
 
-  <script>
-    const video = document.getElementById("camera");
-    const status = document.getElementById("status");
-    let stream = null;
+async function kameraYoq() {
+  if (v.srcObject) v.srcObject.getTracks().forEach(t => t.stop());
+  v.onloadedmetadata = () => {
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    v.play(); aniqla();
+  };
+  try {
+    v.srcObject = await navigator.mediaDevices.getUserMedia(
+      {video: {facingMode: {ideal: rejim}}});
+  } catch (e) { holat.textContent = "Kameraga ruxsat berilmadi"; }
+}
 
-    document.getElementById("start").onclick = async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false
-        });
+document.getElementById("boshla").onclick = kameraYoq;
+document.getElementById("almash").onclick = () => {
+  rejim = rejim === "user" ? "environment" : "user";
+  kameraYoq();
+};
 
-        video.srcObject = stream;
-        status.textContent = "Kamera muvaffaqiyatli yoqildi.";
-      } catch (error) {
-        status.textContent =
-          "Kamera ochilmadi. Ruxсатларни ва браузерни текширинг.";
+function aniqla() {
+  if (loopBor) return;
+  loopBor = true;
+  const ctx = c.getContext("2d");
+  const opts = new faceapi.TinyFaceDetectorOptions({inputSize: 320});
+  const loop = async () => {
+    const res = await faceapi.detectAllFaces(v, opts)
+      .withFaceLandmarks().withFaceDescriptors();
+    if (c.width !== v.videoWidth) { c.width = v.videoWidth; c.height = v.videoHeight; }
+    ctx.clearRect(0, 0, c.width, c.height);
+    res.forEach(r => {
+      let ism = "Notanish", rang = "red";
+      if (matcher) {
+        const m = matcher.findBestMatch(r.descriptor);
+        if (m.label !== "unknown") { ism = m.label; rang = "lime"; }
       }
-    };
-
-    document.getElementById("stop").onclick = () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        video.srcObject = null;
-        stream = null;
-      }
-
-      status.textContent = "Kamera o'chirildi.";
-    };
-  </script>
+      const b = r.detection.box;
+      ctx.strokeStyle = rang; ctx.lineWidth = 3;
+      ctx.strokeRect(b.x, b.y, b.width, b.height);
+      ctx.fillStyle = rang; ctx.font = "24px sans-serif";
+      ctx.fillText(ism, b.x, b.y > 28 ? b.y - 8 : b.y + 24);
+    });
+    requestAnimationFrame(loop);
+  };
+  loop();
+}
+</script>
 </body>
 </html>
