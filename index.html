@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yuz tanish</title>
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.js"></script>
+<style>
+body{margin:0;background:#111;color:#fff;font-family:sans-serif;text-align:center}
+.box{position:relative;width:100%;max-width:480px;margin:auto}
+video,canvas{width:100%;display:block}
+canvas{position:absolute;top:0;left:0}
+button,input{font-size:16px;margin:6px;padding:10px}
+</style>
+</head>
+<body>
+<h3>Yuz tanish</h3>
+<div id="holat">Modellar yuklanmoqda...</div>
+<div>
+<input id="ism" placeholder="Ism (masalan, Davron)">
+<input id="rasm" type="file" accept="image/*">
+<button id="qosh">Qo'shish</button>
+</div>
+<button id="boshla">Kamerani yoqish</button>
+<div class="box"><video id="v" autoplay playsinline muted></video><canvas id="c"></canvas></div>
+<script>
+const MODEL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model/";
+const holat = document.getElementById("holat");
+const v = document.getElementById("v");
+const c = document.getElementById("c");
+let tanishlar = [], matcher = null;
+
+try {
+  const s = JSON.parse(localStorage.getItem("yuzlar") || "[]");
+  tanishlar = s.map(x => ({ism: x.ism, d: new Float32Array(x.d)}));
+} catch (e) {}
+
+function saqla() {
+  try {
+    localStorage.setItem("yuzlar", JSON.stringify(
+      tanishlar.map(t => ({ism: t.ism, d: Array.from(t.d)}))));
+  } catch (e) {}
+}
+
+function yangila() {
+  const m = {};
+  tanishlar.forEach(t => (m[t.ism] = m[t.ism] || []).push(t.d));
+  const list = Object.keys(m).map(n => new faceapi.LabeledFaceDescriptors(n, m[n]));
+  matcher = list.length ? new faceapi.FaceMatcher(list, 0.5) : null;
+}
+
+Promise.all([
+  faceapi.nets.tinyFaceDetector.loadFromUri(MODEL),
+  faceapi.nets.faceLandmark68Net.loadFromUri(MODEL),
+  faceapi.nets.faceRecognitionNet.loadFromUri(MODEL)
+]).then(() => {
+  yangila();
+  holat.textContent = "Tayyor. Tanishlar soni: " + tanishlar.length;
+}).catch(e => holat.textContent = "Model yuklanmadi: " + e);
+
+document.getElementById("qosh").onclick = async () => {
+  const ism = document.getElementById("ism").value.trim();
+  const f = document.getElementById("rasm").files[0];
+  if (!ism || !f) { holat.textContent = "Ism yozing va rasm tanlang"; return; }
+  holat.textContent = "Rasm tekshirilmoqda...";
+  const img = await faceapi.bufferToImage(f);
+  const r = await faceapi
+    .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({inputSize: 512}))
+    .withFaceLandmarks().withFaceDescriptor();
+  if (!r) { holat.textContent = "Rasmda yuz topilmadi. Boshqa rasm tanlang."; return; }
+  tanishlar.push({ism, d: r.descriptor});
+  saqla(); yangila();
+  holat.textContent = ism + " qo'shildi. Jami: " + tanishlar.length;
+};
+
+document.getElementById("boshla").onclick = async () => {
+  v.onloadedmetadata = () => {
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    v.play(); aniqla();
+  };
+  try {
+    v.srcObject = await navigator.mediaDevices.getUserMedia(
+      {video: {facingMode: "user"}});
+  } catch (e) { holat.textContent = "Kameraga ruxsat berilmadi"; }
+};
+
+function aniqla() {
+  const ctx = c.getContext("2d");
+  const opts = new faceapi.TinyFaceDetectorOptions({inputSize: 320});
+  const loop = async () => {
+    const res = await faceapi.detectAllFaces(v, opts)
+      .withFaceLandmarks().withFaceDescriptors();
+    ctx.clearRect(0, 0, c.width, c.height);
+    res.forEach(r => {
+      let ism = "Notanish", rang = "red";
+      if (matcher) {
+        const m = matcher.findBestMatch(r.descriptor);
+        if (m.label !== "unknown") { ism = m.label; rang = "lime"; }
+      }
+      const b = r.detection.box;
+      ctx.strokeStyle = rang; ctx.lineWidth = 3;
+      ctx.strokeRect(b.x, b.y, b.width, b.height);
+      ctx.fillStyle = rang; ctx.font = "24px sans-serif";
+      ctx.fillText(ism, b.x, b.y > 28 ? b.y - 8 : b.y + 24);
+    });
+    requestAnimationFrame(loop);
+  };
+  loop();
+}
+</script>
+</body>
+</html>
