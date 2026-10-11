@@ -3,110 +3,269 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f2027">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
 <title>Yuz tanish</title>
 <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.js"></script>
 <style>
-body{margin:0;min-height:100vh;color:#fff;font-family:sans-serif;text-align:center;
-background:linear-gradient(135deg,#0f2027,#203a43,#2c5364);padding-bottom:30px}
+body{margin:0;min-height:100vh;color:#fff;font-family:sans-serif;text-align:center;background:linear-gradient(135deg,#0f2027,#203a43,#2c5364);background-attachment:fixed;padding-bottom:40px}
 h3{font-size:26px;margin:18px 0 6px;letter-spacing:1px}
+h4{margin:0 0 8px;font-size:16px;font-weight:bold;opacity:.9}
 #holat{margin:8px auto;padding:8px 14px;max-width:90%;background:rgba(255,255,255,.12);border-radius:12px;font-size:15px}
+.kart{margin:14px auto;padding:12px;width:92%;max-width:480px;box-sizing:border-box;background:rgba(255,255,255,.08);border-radius:16px}
 .box{position:relative;width:94%;max-width:480px;margin:14px auto;border-radius:18px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.5);background:#000}
 video,canvas{width:100%;display:block}
 canvas{position:absolute;top:0;left:0}
 button,input{font-size:16px;margin:6px;padding:12px 16px;border:none;border-radius:12px}
 input{background:rgba(255,255,255,.95);color:#111;max-width:80%}
 input[type=file]{background:transparent;color:#fff;max-width:90%}
+input[type=range]{background:transparent;padding:0;width:70%}
+input[type=checkbox]{width:20px;height:20px;padding:0;margin:0 8px;vertical-align:middle}
 button{background:linear-gradient(135deg,#00c6ff,#0072ff);color:#fff;font-weight:bold;box-shadow:0 4px 12px rgba(0,0,0,.3)}
 button:active{transform:scale(.97)}
-#tozala{background:linear-gradient(135deg,#ff5f6d,#c0392b)}
+.qizil{background:linear-gradient(135deg,#ff5f6d,#c0392b)}
+.kichik{padding:8px 12px;font-size:14px;margin:4px}
+.qator{display:flex;justify-content:space-between;align-items:center;padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.12);text-align:left;font-size:15px}
+.eslatma{font-size:12px;opacity:.7;margin:4px 0}
+#qulf{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:10;padding-top:25vh;background:linear-gradient(135deg,#0f2027,#203a43,#2c5364)}
 </style>
 </head>
 <body>
+
+<div id="qulf">
+<h3>PIN kiriting</h3>
+<input id="pinkir" type="password" inputmode="numeric" placeholder="PIN">
+<div><button id="ochish">Ochish</button></div>
+<div id="qulfxato"></div>
+</div>
+
 <h3>Yuz tanish</h3>
 <div id="holat">Modellar yuklanmoqda...</div>
+
 <div>
-<input id="ism" placeholder="Ism (masalan, Davron)">
-<input id="rasm" type="file" accept="image/*">
-<button id="qosh">Qo'shish</button>
-</div>
 <button id="boshla">Kamerani yoqish</button>
 <button id="almash">Kamerani almashtirish</button>
-<button id="tozala">Hammasini o'chirish</button>
+</div>
 <div class="box"><video id="v" autoplay playsinline muted></video><canvas id="c"></canvas></div>
+<div><button id="nsaqla">Notanishni saqlash</button></div>
+
+<div class="kart">
+<h4>Yuz qo'shish</h4>
+<input id="ism" type="text" placeholder="Ism (masalan, Davron)">
+<input id="rasm" type="file" accept="image/*">
+<div>
+<button id="qosh">Rasm bilan qo'shish</button>
+<button id="kqosh">Kameradan qo'shish</button>
+</div>
+<div class="eslatma">Aniqlik uchun bitta odamni turli burchakdan bir necha marta qo'shing.</div>
+</div>
+
+<div class="kart">
+<h4>Tanilgan odamlar</h4>
+<div id="royxat"></div>
+<button id="tozala" class="qizil">Hammasini o'chirish</button>
+</div>
+
+<div class="kart">
+<h4>Sozlamalar</h4>
+<div><label><input id="ovoz" type="checkbox" checked>Ismni ovoz bilan aytish</label></div>
+<div style="margin-top:8px">Aniqlik chegarasi: <span id="epsq">0.50</span></div>
+<input id="eps" type="range" min="0.35" max="0.7" step="0.01" value="0.5">
+<div class="eslatma">Kichik qiymat qattiqroq tekshiradi, begonani adashib tanish ehtimoli kamayadi.</div>
+<div>
+<button id="pinqo" class="kichik">PIN o'rnatish</button>
+<button id="pino" class="kichik">PIN o'chirish</button>
+</div>
+</div>
+
+<div class="kart">
+<h4>Jurnal</h4>
+<div id="jurnal"></div>
+<button id="jyukla" class="kichik">CSV yuklab olish</button>
+<button id="jtozala" class="kichik qizil">Jurnalni tozalash</button>
+</div>
 <script>
 const MODEL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model/";
-const holat = document.getElementById("holat");
-const v = document.getElementById("v");
-const c = document.getElementById("c");
-let tanishlar = [], matcher = null;
-let rejim = "user", loopBor = false;
+const $ = id => document.getElementById(id);
+const holat = $("holat"), v = $("v"), c = $("c");
 
-try {
-  const s = JSON.parse(localStorage.getItem("yuzlar") || "[]");
-  tanishlar = s.map(x => ({ism: x.ism, d: new Float32Array(x.d)}));
-} catch (e) {}
+function lsGet(k, d) {
+  try { const s = localStorage.getItem(k); return s === null ? d : JSON.parse(s); }
+  catch (e) { return d; }
+}
+function lsSet(k, x) {
+  try { localStorage.setItem(k, JSON.stringify(x)); } catch (e) {}
+}
+function vaqt() { return new Date().toLocaleString("sv-SE"); }
+function yukla(blob, nom) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = nom;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+function ismOl() {
+  const s = $("ism").value.trim();
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
+}
+
+let tanishlar = lsGet("yuzlar", []).map(x => ({ism: x.ism, d: new Float32Array(x.d)}));
+let eps = +lsGet("eps", 0.5) || 0.5;
+let jurnal = lsGet("jurnal", []);
+let matcher = null, rejim = "user", loopBor = false, notanishBor = false;
+const oxirgiJ = {}, oxirgiO = {};
+
+function soni() { return new Set(tanishlar.map(t => t.ism)).size; }
 
 function saqla() {
-  try {
-    localStorage.setItem("yuzlar", JSON.stringify(
-      tanishlar.map(t => ({ism: t.ism, d: Array.from(t.d)}))));
-  } catch (e) {}
+  lsSet("yuzlar", tanishlar.map(t => ({ism: t.ism, d: Array.from(t.d)})));
+}
+
+function royxatChiz() {
+  const m = Object.create(null);
+  tanishlar.forEach(t => { m[t.ism] = (m[t.ism] || 0) + 1; });
+  const r = $("royxat");
+  r.textContent = "";
+  const nomlar = Object.keys(m);
+  if (!nomlar.length) { r.textContent = "Hali hech kim qo'shilmagan"; return; }
+  nomlar.forEach(n => {
+    const q = document.createElement("div");
+    q.className = "qator";
+    const s = document.createElement("span");
+    s.textContent = n + " (" + m[n] + " ta rasm)";
+    const b = document.createElement("button");
+    b.className = "kichik qizil";
+    b.textContent = "O'chirish";
+    b.dataset.ism = n;
+    q.appendChild(s);
+    q.appendChild(b);
+    r.appendChild(q);
+  });
 }
 
 function yangila() {
-  const m = {};
-  tanishlar.forEach(t => (m[t.ism] = m[t.ism] || []).push(t.d));
-  const list = Object.keys(m).map(n => new faceapi.LabeledFaceDescriptors(n, m[n]));
-  matcher = list.length ? new faceapi.FaceMatcher(list, 0.5) : null;
+  if (typeof faceapi !== "undefined") {
+    const m = Object.create(null);
+    tanishlar.forEach(t => { (m[t.ism] = m[t.ism] || []).push(t.d); });
+    const list = Object.keys(m).map(n => new faceapi.LabeledFaceDescriptors(n, m[n]));
+    matcher = list.length ? new faceapi.FaceMatcher(list, eps) : null;
+  }
+  royxatChiz();
 }
 
-Promise.all([
-  faceapi.nets.tinyFaceDetector.loadFromUri(MODEL),
-  faceapi.nets.faceLandmark68Net.loadFromUri(MODEL),
-  faceapi.nets.faceRecognitionNet.loadFromUri(MODEL)
-]).then(() => {
-  yangila();
-  holat.textContent = "Tayyor. Tanishlar soni: " + tanishlar.length;
-}).catch(e => holat.textContent = "Model yuklanmadi: " + e);
+function jurnalChiz() {
+  const j = $("jurnal");
+  j.textContent = "";
+  if (!jurnal.length) { j.textContent = "Jurnal bo'sh"; return; }
+  jurnal.slice(-15).reverse().forEach(x => {
+    const q = document.createElement("div");
+    q.className = "qator";
+    const a = document.createElement("span");
+    a.textContent = x.t;
+    const b = document.createElement("span");
+    b.textContent = x.ism;
+    q.appendChild(a);
+    q.appendChild(b);
+    j.appendChild(q);
+  });
+}
 
-document.getElementById("qosh").onclick = async () => {
-  const ism = document.getElementById("ism").value.trim();
-  const f = document.getElementById("rasm").files[0];
-  if (!ism || !f) { holat.textContent = "Ism yozing va rasm tanlang"; return; }
-  holat.textContent = "Rasm tekshirilmoqda...";
-  const img = await faceapi.bufferToImage(f);
-  const r = await faceapi
-    .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({inputSize: 512}))
-    .withFaceLandmarks().withFaceDescriptor();
-  if (!r) { holat.textContent = "Rasmda yuz topilmadi. Boshqa rasm tanlang."; return; }
-  tanishlar.push({ism, d: r.descriptor});
-  saqla(); yangila();
-  holat.textContent = ism + " qo'shildi. Jami: " + tanishlar.length;
+function qosh(ism, d) {
+  tanishlar.push({ism: ism, d: d});
+  saqla();
+  yangila();
+  holat.textContent = ism + " qo'shildi. Odamlar soni: " + soni();
+}
+
+$("royxat").onclick = e => {
+  const n = e.target.dataset && e.target.dataset.ism;
+  if (!n) return;
+  if (!confirm(n + " o'chiriladi. Rozimisiz?")) return;
+  tanishlar = tanishlar.filter(t => t.ism !== n);
+  saqla();
+  yangila();
+  holat.textContent = n + " o'chirildi";
 };
 
-document.getElementById("tozala").onclick = () => {
+$("tozala").onclick = () => {
   if (!confirm("Hamma saqlangan yuzlar o'chiriladi. Rozimisiz?")) return;
-  tanishlar = []; saqla(); yangila();
-  holat.textContent = "Tozalandi. Tanishlar soni: 0";
+  tanishlar = [];
+  saqla();
+  yangila();
+  holat.textContent = "Tozalandi. Odamlar soni: 0";
+};
+
+$("qosh").onclick = async () => {
+  const ism = ismOl();
+  const f = $("rasm").files[0];
+  if (!ism || !f) { holat.textContent = "Ism yozing va rasm tanlang"; return; }
+  holat.textContent = "Rasm tekshirilmoqda...";
+  try {
+    const img = await faceapi.bufferToImage(f);
+    const r = await faceapi
+      .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({inputSize: 512}))
+      .withFaceLandmarks().withFaceDescriptor();
+    if (!r) { holat.textContent = "Rasmda yuz topilmadi. Boshqa rasm tanlang."; return; }
+    qosh(ism, r.descriptor);
+  } catch (e) { holat.textContent = "Rasm o'qilmadi: " + e; }
+};
+  $("kqosh").onclick = async () => {
+  const ism = ismOl();
+  if (!ism) { holat.textContent = "Avval ism yozing"; return; }
+  if (!v.srcObject) { holat.textContent = "Avval kamerani yoqing"; return; }
+  holat.textContent = "Tekshirilmoqda...";
+  try {
+    const res = await faceapi
+      .detectAllFaces(v, new faceapi.TinyFaceDetectorOptions({inputSize: 416}))
+      .withFaceLandmarks().withFaceDescriptors();
+    if (res.length !== 1) {
+      holat.textContent = res.length ? "Kadrda faqat bitta yuz bo'lsin" : "Yuz topilmadi. Yaqinroq keling.";
+      return;
+    }
+    qosh(ism, res[0].descriptor);
+  } catch (e) { holat.textContent = "Xato: " + e; }
 };
 
 async function kameraYoq() {
   if (v.srcObject) v.srcObject.getTracks().forEach(t => t.stop());
   v.onloadedmetadata = () => {
-    c.width = v.videoWidth; c.height = v.videoHeight;
-    v.play(); aniqla();
+    c.width = v.videoWidth;
+    c.height = v.videoHeight;
+    v.play();
+    aniqla();
   };
   try {
     v.srcObject = await navigator.mediaDevices.getUserMedia(
       {video: {facingMode: {ideal: rejim}}});
   } catch (e) { holat.textContent = "Kameraga ruxsat berilmadi"; }
 }
-
-document.getElementById("boshla").onclick = kameraYoq;
-document.getElementById("almash").onclick = () => {
+$("boshla").onclick = kameraYoq;
+$("almash").onclick = () => {
   rejim = rejim === "user" ? "environment" : "user";
   kameraYoq();
 };
+
+function gapir(ism) {
+  if (!$("ovoz").checked || !window.speechSynthesis) return;
+  const t = Date.now();
+  if (oxirgiO[ism] && t - oxirgiO[ism] < 10000) return;
+  oxirgiO[ism] = t;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(new SpeechSynthesisUtterance(ism));
+}
+
+function yozJurnal(ism) {
+  const t = Date.now();
+  if (oxirgiJ[ism] && t - oxirgiJ[ism] < 30000) return;
+  oxirgiJ[ism] = t;
+  jurnal.push({t: vaqt(), ism: ism});
+  if (jurnal.length > 500) jurnal.shift();
+  lsSet("jurnal", jurnal);
+  jurnalChiz();
+}
 
 function aniqla() {
   if (loopBor) return;
@@ -114,25 +273,129 @@ function aniqla() {
   const ctx = c.getContext("2d");
   const opts = new faceapi.TinyFaceDetectorOptions({inputSize: 320});
   const loop = async () => {
-    const res = await faceapi.detectAllFaces(v, opts)
-      .withFaceLandmarks().withFaceDescriptors();
-    if (c.width !== v.videoWidth) { c.width = v.videoWidth; c.height = v.videoHeight; }
-    ctx.clearRect(0, 0, c.width, c.height);
-    res.forEach(r => {
-      let ism = "Notanish", rang = "red";
-      if (matcher) {
-        const m = matcher.findBestMatch(r.descriptor);
-        if (m.label !== "unknown") { ism = m.label; rang = "lime"; }
+    try {
+      if (v.readyState >= 2 && v.videoWidth) {
+        const res = await faceapi.detectAllFaces(v, opts)
+          .withFaceLandmarks().withFaceDescriptors();
+        if (c.width !== v.videoWidth) { c.width = v.videoWidth; c.height = v.videoHeight; }
+        ctx.clearRect(0, 0, c.width, c.height);
+        let nb = false;
+        res.forEach(r => {
+          let ism = "Notanish", rang = "red", taniq = false;
+          if (matcher) {
+            const m = matcher.findBestMatch(r.descriptor);
+            if (m.label !== "unknown") { ism = m.label; rang = "lime"; taniq = true; }
+          }
+          if (taniq) gapir(ism); else nb = true;
+          yozJurnal(ism);
+          const b = r.detection.box;
+          ctx.strokeStyle = rang;
+          ctx.lineWidth = 3;
+          ctx.strokeRect(b.x, b.y, b.width, b.height);
+          ctx.fillStyle = rang;
+          ctx.font = "24px sans-serif";
+          ctx.fillText(ism, b.x, b.y > 28 ? b.y - 8 : b.y + 24);
+        });
+        notanishBor = nb;
       }
-      const b = r.detection.box;
-      ctx.strokeStyle = rang; ctx.lineWidth = 3;
-      ctx.strokeRect(b.x, b.y, b.width, b.height);
-      ctx.fillStyle = rang; ctx.font = "24px sans-serif";
-      ctx.fillText(ism, b.x, b.y > 28 ? b.y - 8 : b.y + 24);
-    });
+    } catch (e) {}
     requestAnimationFrame(loop);
   };
   loop();
+}
+
+$("nsaqla").onclick = () => {
+  if (!v.srcObject) { holat.textContent = "Avval kamerani yoqing"; return; }
+  if (!notanishBor) { holat.textContent = "Kadrda notanish yuz yo'q"; return; }
+  const t = document.createElement("canvas");
+  t.width = v.videoWidth;
+  t.height = v.videoHeight;
+  t.getContext("2d").drawImage(v, 0, 0);
+  t.toBlob(b => {
+    yukla(b, "notanish_" + vaqt().replace(/[: ]/g, "-") + ".jpg");
+    holat.textContent = "Rasm telefonga yuklab olindi";
+  }, "image/jpeg", 0.9);
+};
+
+$("ovoz").checked = lsGet("ovoz", true);
+$("ovoz").onchange = () => lsSet("ovoz", $("ovoz").checked);
+
+$("eps").value = eps;
+$("epsq").textContent = eps.toFixed(2);
+$("eps").oninput = e => {
+  eps = +e.target.value;
+  $("epsq").textContent = eps.toFixed(2);
+  lsSet("eps", eps);
+  yangila();
+};
+
+$("jyukla").onclick = () => {
+  if (!jurnal.length) { holat.textContent = "Jurnal bo'sh"; return; }
+  const csv = "vaqt,ism\n" + jurnal.map(x => x.t + ',"' + x.ism.replace(/"/g, '""') + '"').join("\n");
+  yukla(new Blob(["\ufeff" + csv], {type: "text/csv"}), "jurnal.csv");
+};
+$("jtozala").onclick = () => {
+  if (!confirm("Jurnal tozalanadi. Rozimisiz?")) return;
+  jurnal = [];
+  lsSet("jurnal", jurnal);
+  jurnalChiz();
+};
+
+async function xesh(s) {
+  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("yuz:" + s));
+  return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, "0")).join("");
+}
+if (lsGet("pinhash", null)) $("qulf").style.display = "block";
+$("ochish").onclick = async () => {
+  const h = await xesh($("pinkir").value);
+  if (h === lsGet("pinhash", null)) {
+    $("qulf").style.display = "none";
+    $("pinkir").value = "";
+    $("qulfxato").textContent = "";
+  } else {
+    $("qulfxato").textContent = "PIN noto'g'ri";
+  }
+};
+$("pinkir").onkeydown = e => { if (e.key === "Enter") $("ochish").click(); };
+$("pinqo").onclick = async () => {
+  const eski = lsGet("pinhash", null);
+  if (eski) {
+    const e = prompt("Hozirgi PIN:");
+    if (e === null || (await xesh(e)) !== eski) { holat.textContent = "PIN noto'g'ri"; return; }
+  }
+  const p = prompt("Yangi PIN (4-8 ta raqam):");
+  if (p === null) return;
+  if (!/^\d{4,8}$/.test(p)) { holat.textContent = "PIN 4-8 ta raqam bo'lsin"; return; }
+  lsSet("pinhash", await xesh(p));
+  holat.textContent = "PIN o'rnatildi";
+};
+$("pino").onclick = async () => {
+  const eski = lsGet("pinhash", null);
+  if (!eski) { holat.textContent = "PIN o'rnatilmagan"; return; }
+  const e = prompt("Hozirgi PIN:");
+  if (e === null || (await xesh(e)) !== eski) { holat.textContent = "PIN noto'g'ri"; return; }
+  try { localStorage.removeItem("pinhash"); } catch (x) {}
+  holat.textContent = "PIN o'chirildi";
+};
+
+royxatChiz();
+jurnalChiz();
+
+if (typeof faceapi === "undefined") {
+  holat.textContent = "Kutubxona yuklanmadi. Internetni tekshirib, sahifani yangilang.";
+} else {
+  Promise.all([
+    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL),
+    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL),
+    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL)
+  ]).then(() => {
+    yangila();
+    holat.textContent = "Tayyor. Odamlar soni: " + soni();
+  }).catch(e => { holat.textContent = "Model yuklanmadi: " + e; });
+}
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 </script>
 </body>
